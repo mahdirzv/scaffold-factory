@@ -39,7 +39,32 @@ python3 scripts/scaffold.py create <stack> <name> --dest <path> [flags]
 - **--force** — allow non-empty destination
 - **--refresh-cache** — re-clone the starter even if cached
 
+> **Creating a GitHub repo is a separate step.** After scaffold completes, run:
+> `cd <dest> && gh repo create <slug> --source . --push --private`.
+> The scaffold does not touch remote state for you.
+
 See `references/command-grammar.md` for the full flag set.
+
+## Before running — confirm with the user
+
+Scaffolding is destructive on the target path and generates identifiers that are hard to rename later. Before invoking `scaffold.py create`, make sure the user has chosen — and confirmed — every one of these. **Do not silently default.**
+
+1. **Project name** — used for the directory, Gradle `rootProject.name`, the package suffix, and the generated `.env.local` / `local.properties`. Ask if ambiguous.
+2. **Package prefix** (`--package-prefix`) — DO NOT accept the default `com.example` silently. Ask:
+   > *"What package prefix would you like? e.g. `com.rzv`, `dev.mahdi`, `io.yourcompany`. This will become `<prefix>.<project>` in all Kotlin/Android sources."*
+3. **Which packs** — auth and UI/theme are included by default. Confirm:
+   - KMP: `--room` (data/storage layer)? `--ci` (GitHub Actions workflow)?
+   - Next.js: `--auth-provider clerk|supabase`? `--theme-preset neutral|vivid`?
+4. **Destination path** (`--dest`) — absolute path or sensible relative path. Confirm it doesn't collide with existing work.
+5. **Verification** — the script runs `./gradlew build` or `pnpm build` by default (takes a couple of minutes). Warn the user. Only pass `--skip-verify` if the user explicitly opts out.
+
+If any answer is ambiguous, **ask** — do not guess.
+
+After the scaffold succeeds, remind the user how to push to GitHub:
+```bash
+cd <dest>
+gh repo create <slug> --source . --push --private
+```
 
 ## Architecture
 

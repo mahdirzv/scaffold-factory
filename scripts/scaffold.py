@@ -1,19 +1,30 @@
 #!/usr/bin/env python3
 """Deterministic project scaffolder for KMP and Next.js starters.
 
-Resolves pinned starter repos declared in ~/.hermes/.../references/registry.json,
-shallow-clones them to a local cache, copies them into $DEST, applies find/replace
-rules declared in the starter's own .scaffold.json, and optionally prunes packs
-the user did not request.
+Resolves pinned starter repos declared in ~/.claude/skills/scaffold-factory/references/registry.json
+(or wherever this script's sibling references/ lives), shallow-clones them to a
+local cache, copies them into $DEST, applies find/replace rules declared in the
+starter's own .scaffold.json, and optionally prunes packs the user did not request.
 
 Usage:
   scaffold.py resolve <stack> <name> [flags]        # print JSON plan
   scaffold.py create  <stack> <name> --dest PATH    # resolve + apply + verify
   scaffold.py apply   --plan plan.json --dest PATH  # apply a saved plan
 
+Requirements: Python 3.10+, git. Per-stack: JDK+Android SDK (KMP) or Node 20+ and pnpm (Next.js).
 See references/command-grammar.md for the full flag list.
 """
 from __future__ import annotations
+
+import sys
+
+if sys.version_info < (3, 10):
+    sys.stderr.write(
+        "scaffold.py requires Python 3.10 or newer. "
+        f"You're running Python {sys.version_info.major}.{sys.version_info.minor}.\n"
+        "Install a newer Python (e.g. via pyenv, asdf, or brew) and retry.\n"
+    )
+    raise SystemExit(2)
 
 import argparse
 import json
@@ -50,6 +61,44 @@ def warn(message: str) -> None:
     print(f"warning: {message}", file=sys.stderr)
 
 
+# ---------- subprocess wrapper with actionable missing-tool errors ----------
+
+_MISSING_TOOL_HINTS = {
+    "pnpm": "Install with `npm i -g pnpm` or `corepack enable`.",
+    "npm": "Comes with Node.js — install from https://nodejs.org/.",
+    "node": "Install Node.js 20+ from https://nodejs.org/.",
+    "git": "Install git from https://git-scm.com/.",
+    "gh": "Install GitHub CLI from https://cli.github.com/.",
+    "./gradlew": "The scaffolded project should include a Gradle wrapper. If it's missing, the starter may be incomplete.",
+    "gradle": "Prefer `./gradlew` from the project root. If you need a system gradle: https://gradle.org/install/.",
+}
+
+
+def _tool_hint(executable: str) -> str:
+    if executable in _MISSING_TOOL_HINTS:
+        return _MISSING_TOOL_HINTS[executable]
+    return "Install it (or add it to PATH) before retrying."
+
+
+def run_tool(cmd, *, cwd=None, shell=False, capture=True) -> subprocess.CompletedProcess:
+    """Run a subprocess; convert FileNotFoundError into a clean fail() with a hint."""
+    display = cmd if isinstance(cmd, str) else " ".join(cmd)
+    try:
+        return subprocess.run(
+            cmd,
+            cwd=cwd,
+            shell=shell,
+            text=True,
+            capture_output=capture,
+        )
+    except FileNotFoundError:
+        first = cmd.split()[0] if isinstance(cmd, str) else cmd[0]
+        fail(
+            f"required executable not found: {first!r} "
+            f"(while trying to run: {display}). {_tool_hint(first)}"
+        )
+
+
 # ---------- identifiers ----------
 
 def slugify(value: str) -> str:
@@ -74,17 +123,47 @@ def compact_identifier(value: str) -> str:
     return compact
 
 
+# Dotted Kotlin/Java package prefix: lowercase letters, digits, underscores,
+# each segment starting with a letter. Matches what Kotlin/Gradle accept
+# without backticks in common namespace usage.
+_PACKAGE_PREFIX_RE = re.compile(r"^[a-z][a-z0-9_]*(\.[a-z][a-z0-9_]*)*$")
+
+
+def validate_package_prefix(prefix: str) -> None:
+    if not _PACKAGE_PREFIX_RE.match(prefix):
+        fail(
+            f"invalid --package-prefix {prefix!r}: must be dotted lowercase "
+            "segments starting with a letter (e.g. `com.example`, `dev.mahdi`, "
+            "`io.yourcompany`). Allowed chars per segment: [a-z0-9_]."
+        )
+
+
 def build_identifiers(stack: str, name: str, package_prefix: str, bundle_prefix: str | None) -> dict[str, str]:
+    validate_package_prefix(package_prefix)
+    if bundle_prefix is not None:
+        validate_package_prefix(bundle_prefix)
+
     slug = slugify(name)
     display = humanize(name)
     compact = compact_identifier(slug)
     package_name = f"{package_prefix}.{compact}"
     package_path = package_name.replace(".", "/")
+
+    # project_root_name must be Gradle-legal: rootProject.name = "...",
+    # Xcode project name, and fs-safe. Strip everything outside [A-Za-z0-9_].
+    root_name = re.sub(r"[^A-Za-z0-9_]+", "", display.replace(" ", ""))
+    if not root_name:
+        fail(
+            f"project name {name!r} produces an empty project_root_name after "
+            "sanitization (only letters, digits, and underscores are kept). "
+            "Pick a name with at least one alphanumeric character."
+        )
+
     return {
         "stack": stack,
         "project_name": display,
         "project_slug": slug,
-        "project_root_name": display.replace(" ", ""),
+        "project_root_name": root_name,
         "package_name": package_name,
         "package_path": package_path,
         "package_prefix": package_prefix,
@@ -150,16 +229,16 @@ def ensure_cached_clone(url: str, ref: str, cache_dir: Path, refresh: bool = Fal
         shutil.rmtree(tmp)
     cmd = ["git", "clone", "--depth", "1", "--branch", ref, url, str(tmp)]
     print(f"[scaffold] cloning {url}@{ref} → {dest}", file=sys.stderr)
-    proc = subprocess.run(cmd, capture_output=True, text=True)
+    proc = run_tool(cmd)
     if proc.returncode != 0:
         # fall back to full clone + checkout for raw SHAs
         if tmp.exists():
             shutil.rmtree(tmp)
         cmd = ["git", "clone", url, str(tmp)]
-        proc = subprocess.run(cmd, capture_output=True, text=True)
+        proc = run_tool(cmd)
         if proc.returncode != 0:
             fail(f"git clone failed for {url}: {proc.stderr.strip()}")
-        co = subprocess.run(["git", "-C", str(tmp), "checkout", ref], capture_output=True, text=True)
+        co = run_tool(["git", "-C", str(tmp), "checkout", ref])
         if co.returncode != 0:
             fail(f"git checkout {ref} failed: {co.stderr.strip()}")
     tmp.rename(dest)
@@ -233,8 +312,6 @@ def collect_selected_ids(args: argparse.Namespace) -> list[str]:
         ids.append(f"{args.stack}_room")
     if args.ci:
         ids.append(f"{args.stack}_ci")
-    if args.github:
-        ids.append(f"{args.stack}_github")
     ids.extend(args.pack or [])
     seen: set[str] = set()
     return [i for i in ids if not (i in seen or seen.add(i))]
@@ -310,7 +387,7 @@ def read_starter_manifest(src: Path) -> dict[str, Any]:
         fail(f"invalid .scaffold.json in {src}: {e}")
 
 
-def apply_starter_placeholders(dest: Path, manifest: dict[str, Any], values: dict[str, str]) -> tuple[int, int]:
+def apply_starter_placeholders(dest: Path, manifest: dict[str, Any], values: dict[str, str]) -> dict[str, Any]:
     """Rewrite file CONTENTS and relocate files whose POSIX relpath contains a find string.
 
     Rules declared by the starter's .scaffold.json:
@@ -321,7 +398,11 @@ def apply_starter_placeholders(dest: Path, manifest: dict[str, Any], values: dic
       (b) POSIX relative path of each file (so multi-segment paths like
           `com/example/foo/Bar.kt` rename correctly to `com/rzv/bar/Bar.kt`).
 
-    After relocation, empty parent dirs are pruned.
+    Drift detection: any placeholder whose `find` string matches nothing
+    emits a warning (likely .scaffold.json is out of sync with the repo);
+    if ALL placeholders match nothing, the function fails outright.
+
+    Returns a dict with keys: changed_files, renamed_paths, match_counts.
     """
     pairs: list[tuple[str, str]] = []
     for entry in manifest.get("placeholders", []) or []:
@@ -333,11 +414,15 @@ def apply_starter_placeholders(dest: Path, manifest: dict[str, Any], values: dic
     # Longest find first so overlapping substrings resolve correctly
     pairs.sort(key=lambda p: len(p[0]), reverse=True)
     if not pairs:
-        return 0, 0
+        return {"changed_files": 0, "renamed_paths": 0, "match_counts": {}}
+
+    match_counts: dict[str, int] = {find: 0 for find, _ in pairs}
 
     def replace_all(text: str) -> str:
         for old, new in pairs:
-            text = text.replace(old, new)
+            if old in text:
+                match_counts[old] += text.count(old)
+                text = text.replace(old, new)
         return text
 
     # ---- Pass 1: rewrite file contents ----
@@ -387,7 +472,25 @@ def apply_starter_placeholders(dest: Path, manifest: dict[str, Any], values: dic
         except OSError:
             pass
 
-    return changed_files, renamed_paths
+    # ---- Drift detection ----
+    zero_match = [find for find, count in match_counts.items() if count == 0]
+    if zero_match and len(zero_match) == len(pairs):
+        fail(
+            "no placeholder find strings matched anything in the starter; "
+            ".scaffold.json is out of sync with the repo. Missing strings: "
+            + ", ".join(repr(f) for f in zero_match)
+        )
+    for find in zero_match:
+        warn(
+            f"placeholder find string {find!r} matched 0 files/paths; "
+            "likely .scaffold.json has drifted from the starter content."
+        )
+
+    return {
+        "changed_files": changed_files,
+        "renamed_paths": renamed_paths,
+        "match_counts": match_counts,
+    }
 
 
 # ---------- subtractive prune ----------
@@ -470,10 +573,10 @@ def run_verify(commands: list[str | list[str]], cwd: Path) -> list[dict[str, Any
     for cmd in commands:
         if isinstance(cmd, list):
             display = " ".join(cmd)
-            proc = subprocess.run(cmd, cwd=cwd, text=True, capture_output=True)
+            proc = run_tool(cmd, cwd=cwd, shell=False)
         else:
             display = cmd
-            proc = subprocess.run(cmd, cwd=cwd, shell=True, text=True, capture_output=True)
+            proc = run_tool(cmd, cwd=cwd, shell=True)
         print(f"$ {display}")
         if proc.stdout:
             print(proc.stdout, end="")
@@ -562,7 +665,12 @@ def apply_plan(plan: dict[str, Any], dest: Path, *, force: bool = False, skip_ve
     removed = prune_unselected_packs(dest, manifest, selected_pack_keys) if manifest else []
 
     # Rewrite find/replace pairs + path renames from the starter manifest
-    changed_files, renamed_paths = apply_starter_placeholders(dest, manifest, plan["placeholder_map"]) if manifest else (0, 0)
+    placeholder_stats = (
+        apply_starter_placeholders(dest, manifest, plan["placeholder_map"])
+        if manifest else {"changed_files": 0, "renamed_paths": 0, "match_counts": {}}
+    )
+    changed_files = placeholder_stats["changed_files"]
+    renamed_paths = placeholder_stats["renamed_paths"]
 
     # env_file generation (Next.js)
     env_written = apply_env_file(dest, manifest, plan["placeholder_map"]) if manifest else None
@@ -592,6 +700,7 @@ def apply_plan(plan: dict[str, Any], dest: Path, *, force: bool = False, skip_ve
         "destination": str(dest),
         "changed_files": changed_files,
         "renamed_paths": renamed_paths,
+        "placeholder_match_counts": placeholder_stats["match_counts"],
         "removed_packs": removed,
         "env_file": env_written,
         "android_sdk": sdk_written,
@@ -612,7 +721,6 @@ def add_scaffold_args(p: argparse.ArgumentParser) -> None:
     p.add_argument("--auth-provider")
     p.add_argument("--theme-preset")
     p.add_argument("--room", action="store_true")
-    p.add_argument("--github", action="store_true")
     p.add_argument("--ci", action="store_true")
     p.add_argument("--no-auth", action="store_true")
     p.add_argument("--no-theme", action="store_true")
