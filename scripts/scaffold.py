@@ -1,19 +1,30 @@
 #!/usr/bin/env python3
 """Deterministic project scaffolder for KMP and Next.js starters.
 
-Resolves pinned starter repos declared in ~/.hermes/.../references/registry.json,
-shallow-clones them to a local cache, copies them into $DEST, applies find/replace
-rules declared in the starter's own .scaffold.json, and optionally prunes packs
-the user did not request.
+Resolves pinned starter repos declared in ~/.claude/skills/scaffold-factory/references/registry.json
+(or wherever this script's sibling references/ lives), shallow-clones them to a
+local cache, copies them into $DEST, applies find/replace rules declared in the
+starter's own .scaffold.json, and optionally prunes packs the user did not request.
 
 Usage:
   scaffold.py resolve <stack> <name> [flags]        # print JSON plan
   scaffold.py create  <stack> <name> --dest PATH    # resolve + apply + verify
   scaffold.py apply   --plan plan.json --dest PATH  # apply a saved plan
 
+Requirements: Python 3.10+, git. Per-stack: JDK+Android SDK (KMP) or Node 20+ and pnpm (Next.js).
 See references/command-grammar.md for the full flag list.
 """
 from __future__ import annotations
+
+import sys
+
+if sys.version_info < (3, 10):
+    sys.stderr.write(
+        "scaffold.py requires Python 3.10 or newer. "
+        f"You're running Python {sys.version_info.major}.{sys.version_info.minor}.\n"
+        "Install a newer Python (e.g. via pyenv, asdf, or brew) and retry.\n"
+    )
+    raise SystemExit(2)
 
 import argparse
 import json
