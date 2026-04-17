@@ -9,11 +9,11 @@ All notable changes to scaffold-factory are documented here. Format loosely foll
 Registry pin bump to consume the Next.js starter's senior-audit fixes. scaffold.py logic unchanged.
 
 ### Changed
-- **Registry pin** `base-next-starter@v0.1.3` → `@v0.1.5`. Ships the "round out the core" audit wave (v0.1.4) plus a same-day sentinel-rethrow follow-up (v0.1.5):
-  - Root `src/proxy.ts` now dispatches through `@/modules/auth` (was hardcoded if/else between clerk and supabase); firebase/custom get real proxy stubs so the abstraction no longer leaks.
+- **Registry pin** `base-next-starter@v0.1.3` → `@v0.1.6`. Ships the "round out the core" audit wave across three iterations (v0.1.4 regressed the Next.js runtime smoke; v0.1.5 red-herring fix; v0.1.6 is the real fix):
+  - Root `src/proxy.ts` now dispatches through a narrow `@/modules/auth/proxy` entry. This isolates the proxy's server/edge evaluation path from the `'use client'` component modules that the auth barrel chain-loads — the v0.1.4 regression where `/dashboard` returned 200 with an RSC body containing `NEXT_REDIRECT` literals instead of 307-ing to `/sign-in`. Provider dispatch remains env-driven; firebase/custom get real no-op proxy stubs.
   - Vestigial `middleware(req)` method removed from `AuthServerOps` (it was a no-op in every real provider).
   - `AuthProviderName` single-sourced from `@/config`; all `process.env.AUTH_PROVIDER ?? 'clerk'` sites replaced with typed `config.auth.provider`.
-  - New route boundaries: `app/error.tsx`, `app/not-found.tsx`, `app/loading.tsx`. `error.tsx` re-throws framework sentinel errors (`NEXT_REDIRECT`, `NEXT_NOT_FOUND`) so Next.js handles them upstream — without this, `redirect('/sign-in')` inside a protected page would render the error UI (200) instead of redirecting (307). Caught by scaffold-factory's runtime smoke.
+  - New route boundaries: `app/global-error.tsx` (for root-layout failures), `app/not-found.tsx`, `app/loading.tsx`. Root `app/error.tsx` intentionally *not* added — it sits in the server-component redirect path and breaks `redirect()` → 307. Add per-route-group `error.tsx` inside `(protected)` or `(auth)` if branded error pages are wanted.
   - `globals.css` `@theme inline { var: var }` circular no-op deleted.
   - Zod env validation in `@/config` — typos in `AUTH_PROVIDER`/`THEME_PRESET` fail loudly at boot.
   - Starter tests: 44 → 46 passing.
