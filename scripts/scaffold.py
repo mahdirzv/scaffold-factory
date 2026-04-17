@@ -61,6 +61,44 @@ def warn(message: str) -> None:
     print(f"warning: {message}", file=sys.stderr)
 
 
+# ---------- subprocess wrapper with actionable missing-tool errors ----------
+
+_MISSING_TOOL_HINTS = {
+    "pnpm": "Install with `npm i -g pnpm` or `corepack enable`.",
+    "npm": "Comes with Node.js — install from https://nodejs.org/.",
+    "node": "Install Node.js 20+ from https://nodejs.org/.",
+    "git": "Install git from https://git-scm.com/.",
+    "gh": "Install GitHub CLI from https://cli.github.com/.",
+    "./gradlew": "The scaffolded project should include a Gradle wrapper. If it's missing, the starter may be incomplete.",
+    "gradle": "Prefer `./gradlew` from the project root. If you need a system gradle: https://gradle.org/install/.",
+}
+
+
+def _tool_hint(executable: str) -> str:
+    if executable in _MISSING_TOOL_HINTS:
+        return _MISSING_TOOL_HINTS[executable]
+    return "Install it (or add it to PATH) before retrying."
+
+
+def run_tool(cmd, *, cwd=None, shell=False, capture=True) -> subprocess.CompletedProcess:
+    """Run a subprocess; convert FileNotFoundError into a clean fail() with a hint."""
+    display = cmd if isinstance(cmd, str) else " ".join(cmd)
+    try:
+        return subprocess.run(
+            cmd,
+            cwd=cwd,
+            shell=shell,
+            text=True,
+            capture_output=capture,
+        )
+    except FileNotFoundError:
+        first = cmd.split()[0] if isinstance(cmd, str) else cmd[0]
+        fail(
+            f"required executable not found: {first!r} "
+            f"(while trying to run: {display}). {_tool_hint(first)}"
+        )
+
+
 # ---------- identifiers ----------
 
 def slugify(value: str) -> str:
@@ -161,16 +199,16 @@ def ensure_cached_clone(url: str, ref: str, cache_dir: Path, refresh: bool = Fal
         shutil.rmtree(tmp)
     cmd = ["git", "clone", "--depth", "1", "--branch", ref, url, str(tmp)]
     print(f"[scaffold] cloning {url}@{ref} → {dest}", file=sys.stderr)
-    proc = subprocess.run(cmd, capture_output=True, text=True)
+    proc = run_tool(cmd)
     if proc.returncode != 0:
         # fall back to full clone + checkout for raw SHAs
         if tmp.exists():
             shutil.rmtree(tmp)
         cmd = ["git", "clone", url, str(tmp)]
-        proc = subprocess.run(cmd, capture_output=True, text=True)
+        proc = run_tool(cmd)
         if proc.returncode != 0:
             fail(f"git clone failed for {url}: {proc.stderr.strip()}")
-        co = subprocess.run(["git", "-C", str(tmp), "checkout", ref], capture_output=True, text=True)
+        co = run_tool(["git", "-C", str(tmp), "checkout", ref])
         if co.returncode != 0:
             fail(f"git checkout {ref} failed: {co.stderr.strip()}")
     tmp.rename(dest)
@@ -481,10 +519,10 @@ def run_verify(commands: list[str | list[str]], cwd: Path) -> list[dict[str, Any
     for cmd in commands:
         if isinstance(cmd, list):
             display = " ".join(cmd)
-            proc = subprocess.run(cmd, cwd=cwd, text=True, capture_output=True)
+            proc = run_tool(cmd, cwd=cwd, shell=False)
         else:
             display = cmd
-            proc = subprocess.run(cmd, cwd=cwd, shell=True, text=True, capture_output=True)
+            proc = run_tool(cmd, cwd=cwd, shell=True)
         print(f"$ {display}")
         if proc.stdout:
             print(proc.stdout, end="")
