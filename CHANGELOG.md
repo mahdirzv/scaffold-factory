@@ -4,6 +4,21 @@ All notable changes to scaffold-factory are documented here. Format loosely foll
 
 ## [Unreleased]
 
+## [0.4.3] — 2026-04-17
+
+Registry pin bump to consume the Next.js starter's senior-audit fixes. scaffold.py logic unchanged.
+
+### Changed
+- **Registry pin** `base-next-starter@v0.1.3` → `@v0.1.7`. Ships the "round out the core" audit wave. v0.1.4 introduced a regression that took three iterations + a proper git bisect to pin down; the actual root cause is **`app/loading.tsx` at the route root**, not `error.tsx` (v0.1.5 guess) and not the proxy entry structure (v0.1.6 guess):
+  - Root `src/proxy.ts` now dispatches through a narrow `@/modules/auth/proxy` entry; `authProxy` reads the active provider's proxy from a `Record<AuthProviderName, AuthProxy>` map. Provider dispatch remains env-driven; firebase/custom get real no-op proxy stubs.
+  - Vestigial `middleware(req)` method removed from `AuthServerOps` (was a no-op in every real provider).
+  - `AuthProviderName` single-sourced from `@/config`; all `process.env.AUTH_PROVIDER ?? 'clerk'` sites replaced with typed `config.auth.provider`.
+  - Route boundaries: `app/global-error.tsx` (root-layout failures) + `app/not-found.tsx`. **`loading.tsx` lives inside `app/(auth)/` intentionally** — a root-level `loading.tsx` wraps every route in a Suspense boundary, and Server Components that throw `NEXT_REDIRECT` inside Suspense respond with `200 + streaming RSC body containing the redirect payload` instead of a clean `307`. Non-JS clients (curl, SEO crawlers, health probes) never redirect. Keep `loading.tsx` inside route groups that need a skeleton.
+  - `globals.css` `@theme inline { var: var }` circular no-op deleted.
+  - Zod env validation in `@/config` — typos in `AUTH_PROVIDER`/`THEME_PRESET` fail loudly at boot.
+  - Starter tests: 44 → 46 passing.
+- `SCAFFOLD_VERSION`, `registry.json` version, `plugin.json`, `marketplace.json` all bumped to 0.4.3.
+
 ## [0.4.2] — 2026-04-17
 
 Starter-owned post-scaffold notes. The "reference modules need manual wiring" message now lives in each starter's `.scaffold.json` instead of being hardcoded per-pack in scaffold.py. Adding a new KMP pack no longer requires a scaffold-factory release.
