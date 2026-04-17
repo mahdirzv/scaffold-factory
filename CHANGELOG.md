@@ -4,6 +4,14 @@ All notable changes to scaffold-factory are documented here. Format loosely foll
 
 ## [Unreleased]
 
+## [0.4.9] — 2026-04-18
+
+Pin bump to consume base-next-starter v0.1.11 (conditional ClerkProvider — non-clerk bundles no longer include `@clerk/nextjs`). No scaffold.py logic changes; 115 pytest tests still pass.
+
+### Changed
+- **Registry pin** `base-next-starter@v0.1.10` → `@v0.1.11`. v0.1.11 makes `RootLayout` async and dynamic-imports `ClerkProvider` only when `AUTH_PROVIDER=clerk` AND the publishable key is set. Supabase/firebase/custom deployments no longer bundle Clerk's package.
+- `SCAFFOLD_VERSION`, `registry.json`, `plugin.json`, `marketplace.json` all bumped to 0.4.9.
+
 ## [0.4.8] — 2026-04-18
 
 Forward-compat and cleanup-on-failure. scaffold.py hardening, no pin change. 106 → 115 pytest tests.
