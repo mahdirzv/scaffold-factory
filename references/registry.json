@@ -1,36 +1,78 @@
 {
   "version": "0.1.0",
   "min_scaffold_py_version": "0.1.0",
-  "_note": "TODO(v0.1.0): flip @scaffold/v0.1.0-prep -> @v0.1.0 across all sources AFTER tags are cut on kmp-starter-project and base-next-starter. Branch-based refs are fine for pre-tag testing but must NOT ship in a released skill tag — feature branches get deleted and the registry would break.",
+  "_note": "v0.1.0 release. Sources pin to @v0.1.0 on both starter repos. Tags are immutable \u2014 safe to cache indefinitely.",
   "stack_defaults": {
-    "kmp":    { "auth_provider": "clerk", "theme_preset": "neutral" },
-    "nextjs": { "auth_provider": "clerk", "theme_preset": "neutral" }
+    "kmp": {
+      "auth_provider": "clerk",
+      "theme_preset": "neutral"
+    },
+    "nextjs": {
+      "auth_provider": "clerk",
+      "theme_preset": "neutral"
+    }
   },
   "packs": [
     {
       "id": "kmp_base",
       "stack": "kmp",
       "kind": "base",
-      "source": "git+https://github.com/mahdirzv/kmp-starter-project@scaffold/v0.1.0-prep",
-      "verify": ["./gradlew --no-daemon build"]
+      "source": "git+https://github.com/mahdirzv/kmp-starter-project@v0.1.0",
+      "verify": [
+        "./gradlew --no-daemon build"
+      ]
     },
-    { "id": "kmp_auth",     "stack": "kmp", "kind": "feature" },
-    { "id": "kmp_ui_theme", "stack": "kmp", "kind": "feature" },
-    { "id": "kmp_room",     "stack": "kmp", "kind": "feature" },
-    { "id": "kmp_ci",       "stack": "kmp", "kind": "infra"   },
-
+    {
+      "id": "kmp_auth",
+      "stack": "kmp",
+      "kind": "feature"
+    },
+    {
+      "id": "kmp_ui_theme",
+      "stack": "kmp",
+      "kind": "feature"
+    },
+    {
+      "id": "kmp_room",
+      "stack": "kmp",
+      "kind": "feature"
+    },
+    {
+      "id": "kmp_ci",
+      "stack": "kmp",
+      "kind": "infra"
+    },
     {
       "id": "nextjs_base",
       "stack": "nextjs",
       "kind": "base",
-      "source": "git+https://github.com/mahdirzv/base-next-starter@scaffold/v0.1.0-prep",
+      "source": "git+https://github.com/mahdirzv/base-next-starter@v0.1.0",
       "verify": [
-        ["pnpm", "install", "--frozen-lockfile"],
-        ["pnpm", "build"]
+        [
+          "pnpm",
+          "install",
+          "--frozen-lockfile"
+        ],
+        [
+          "pnpm",
+          "build"
+        ]
       ]
     },
-    { "id": "nextjs_auth",     "stack": "nextjs", "kind": "feature" },
-    { "id": "nextjs_ui_theme", "stack": "nextjs", "kind": "feature" },
-    { "id": "nextjs_ci",       "stack": "nextjs", "kind": "infra"   }
+    {
+      "id": "nextjs_auth",
+      "stack": "nextjs",
+      "kind": "feature"
+    },
+    {
+      "id": "nextjs_ui_theme",
+      "stack": "nextjs",
+      "kind": "feature"
+    },
+    {
+      "id": "nextjs_ci",
+      "stack": "nextjs",
+      "kind": "infra"
+    }
   ]
 }
