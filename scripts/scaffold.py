@@ -123,17 +123,47 @@ def compact_identifier(value: str) -> str:
     return compact
 
 
+# Dotted Kotlin/Java package prefix: lowercase letters, digits, underscores,
+# each segment starting with a letter. Matches what Kotlin/Gradle accept
+# without backticks in common namespace usage.
+_PACKAGE_PREFIX_RE = re.compile(r"^[a-z][a-z0-9_]*(\.[a-z][a-z0-9_]*)*$")
+
+
+def validate_package_prefix(prefix: str) -> None:
+    if not _PACKAGE_PREFIX_RE.match(prefix):
+        fail(
+            f"invalid --package-prefix {prefix!r}: must be dotted lowercase "
+            "segments starting with a letter (e.g. `com.example`, `dev.mahdi`, "
+            "`io.yourcompany`). Allowed chars per segment: [a-z0-9_]."
+        )
+
+
 def build_identifiers(stack: str, name: str, package_prefix: str, bundle_prefix: str | None) -> dict[str, str]:
+    validate_package_prefix(package_prefix)
+    if bundle_prefix is not None:
+        validate_package_prefix(bundle_prefix)
+
     slug = slugify(name)
     display = humanize(name)
     compact = compact_identifier(slug)
     package_name = f"{package_prefix}.{compact}"
     package_path = package_name.replace(".", "/")
+
+    # project_root_name must be Gradle-legal: rootProject.name = "...",
+    # Xcode project name, and fs-safe. Strip everything outside [A-Za-z0-9_].
+    root_name = re.sub(r"[^A-Za-z0-9_]+", "", display.replace(" ", ""))
+    if not root_name:
+        fail(
+            f"project name {name!r} produces an empty project_root_name after "
+            "sanitization (only letters, digits, and underscores are kept). "
+            "Pick a name with at least one alphanumeric character."
+        )
+
     return {
         "stack": stack,
         "project_name": display,
         "project_slug": slug,
-        "project_root_name": display.replace(" ", ""),
+        "project_root_name": root_name,
         "package_name": package_name,
         "package_path": package_path,
         "package_prefix": package_prefix,
