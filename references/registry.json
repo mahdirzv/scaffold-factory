@@ -1,7 +1,7 @@
 {
   "version": "0.4.3",
   "min_scaffold_py_version": "0.1.0",
-  "_note": "v0.4.3: nextjs base bumped to v0.1.6 (round-out-the-core audit wave: proxy rewired through a narrow @/modules/auth/proxy entry that avoids chain-loading 'use client' component modules into the proxy evaluation path — v0.1.4's barrel import broke /dashboard's redirect; route boundaries added (global-error.tsx, not-found.tsx, loading.tsx); AuthProviderName single-sourced from @/config; zod env validation). Tags are immutable — safe to cache indefinitely.",
+  "_note": "v0.4.3: nextjs base bumped to v0.1.7 (round-out-the-core audit wave: proxy rewired through @/modules/auth; AuthProviderName single-sourced from @/config; zod env validation; route boundaries global-error.tsx + not-found.tsx. IMPORTANT — loading.tsx intentionally lives INSIDE (auth)/ not at root: a root-level loading.tsx wraps every route in a Suspense boundary, and Server Components that throw NEXT_REDIRECT inside Suspense stream a 200 + RSC redirect payload instead of emitting 307, breaking non-JS clients like curl/crawlers). Tags are immutable — safe to cache indefinitely.",
   "stack_defaults": {
     "kmp": {
       "auth_provider": "clerk",
@@ -46,7 +46,7 @@
       "id": "nextjs_base",
       "stack": "nextjs",
       "kind": "base",
-      "source": "git+https://github.com/mahdirzv/base-next-starter@v0.1.6",
+      "source": "git+https://github.com/mahdirzv/base-next-starter@v0.1.7",
       "verify": [
         [
           "pnpm",
