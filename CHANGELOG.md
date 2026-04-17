@@ -4,6 +4,20 @@ All notable changes to scaffold-factory are documented here. Format loosely foll
 
 ## [Unreleased]
 
+## [0.4.4] — 2026-04-17
+
+Registry pin bump to consume the Next.js starter's industry-standard structural refactor. scaffold.py logic unchanged.
+
+### Changed
+- **Registry pin** `base-next-starter@v0.1.7` → `@v0.1.8`. v0.1.8 removes `src/modules/` — the non-idiomatic layout the senior audit flagged as the biggest "feels unfamiliar" issue. New layout matches conventions of t3-turbo / next-forge / feature-sliced design:
+  - `src/modules/auth` → **`src/features/auth`**
+  - `src/modules/ui/components` → **`src/components/ui`** (shadcn-native location; `pnpm dlx shadcn@latest add` now drops into the right place)
+  - `src/modules/ui/{tokens,themes}` → **`src/lib/design/{tokens,themes}`**
+  - `components.json` aliases fixed (were pointing at nonexistent paths)
+  - `pnpm-workspace.yaml` removed (single-package repo, not a monorepo — workspace file was implied intent that wasn't delivered)
+- Starter runtime + public APIs unchanged; zero behaviour change for existing scaffolds.
+- `SCAFFOLD_VERSION`, `registry.json` version, `plugin.json`, `marketplace.json` all bumped to 0.4.4.
+
 ## [0.4.3] — 2026-04-17
 
 Registry pin bump to consume the Next.js starter's senior-audit fixes. scaffold.py logic unchanged.
