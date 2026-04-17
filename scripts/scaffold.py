@@ -357,7 +357,7 @@ def read_starter_manifest(src: Path) -> dict[str, Any]:
         fail(f"invalid .scaffold.json in {src}: {e}")
 
 
-def apply_starter_placeholders(dest: Path, manifest: dict[str, Any], values: dict[str, str]) -> tuple[int, int]:
+def apply_starter_placeholders(dest: Path, manifest: dict[str, Any], values: dict[str, str]) -> dict[str, Any]:
     """Rewrite file CONTENTS and relocate files whose POSIX relpath contains a find string.
 
     Rules declared by the starter's .scaffold.json:
@@ -368,7 +368,11 @@ def apply_starter_placeholders(dest: Path, manifest: dict[str, Any], values: dic
       (b) POSIX relative path of each file (so multi-segment paths like
           `com/example/foo/Bar.kt` rename correctly to `com/rzv/bar/Bar.kt`).
 
-    After relocation, empty parent dirs are pruned.
+    Drift detection: any placeholder whose `find` string matches nothing
+    emits a warning (likely .scaffold.json is out of sync with the repo);
+    if ALL placeholders match nothing, the function fails outright.
+
+    Returns a dict with keys: changed_files, renamed_paths, match_counts.
     """
     pairs: list[tuple[str, str]] = []
     for entry in manifest.get("placeholders", []) or []:
@@ -380,11 +384,15 @@ def apply_starter_placeholders(dest: Path, manifest: dict[str, Any], values: dic
     # Longest find first so overlapping substrings resolve correctly
     pairs.sort(key=lambda p: len(p[0]), reverse=True)
     if not pairs:
-        return 0, 0
+        return {"changed_files": 0, "renamed_paths": 0, "match_counts": {}}
+
+    match_counts: dict[str, int] = {find: 0 for find, _ in pairs}
 
     def replace_all(text: str) -> str:
         for old, new in pairs:
-            text = text.replace(old, new)
+            if old in text:
+                match_counts[old] += text.count(old)
+                text = text.replace(old, new)
         return text
 
     # ---- Pass 1: rewrite file contents ----
@@ -434,7 +442,25 @@ def apply_starter_placeholders(dest: Path, manifest: dict[str, Any], values: dic
         except OSError:
             pass
 
-    return changed_files, renamed_paths
+    # ---- Drift detection ----
+    zero_match = [find for find, count in match_counts.items() if count == 0]
+    if zero_match and len(zero_match) == len(pairs):
+        fail(
+            "no placeholder find strings matched anything in the starter; "
+            ".scaffold.json is out of sync with the repo. Missing strings: "
+            + ", ".join(repr(f) for f in zero_match)
+        )
+    for find in zero_match:
+        warn(
+            f"placeholder find string {find!r} matched 0 files/paths; "
+            "likely .scaffold.json has drifted from the starter content."
+        )
+
+    return {
+        "changed_files": changed_files,
+        "renamed_paths": renamed_paths,
+        "match_counts": match_counts,
+    }
 
 
 # ---------- subtractive prune ----------
@@ -609,7 +635,12 @@ def apply_plan(plan: dict[str, Any], dest: Path, *, force: bool = False, skip_ve
     removed = prune_unselected_packs(dest, manifest, selected_pack_keys) if manifest else []
 
     # Rewrite find/replace pairs + path renames from the starter manifest
-    changed_files, renamed_paths = apply_starter_placeholders(dest, manifest, plan["placeholder_map"]) if manifest else (0, 0)
+    placeholder_stats = (
+        apply_starter_placeholders(dest, manifest, plan["placeholder_map"])
+        if manifest else {"changed_files": 0, "renamed_paths": 0, "match_counts": {}}
+    )
+    changed_files = placeholder_stats["changed_files"]
+    renamed_paths = placeholder_stats["renamed_paths"]
 
     # env_file generation (Next.js)
     env_written = apply_env_file(dest, manifest, plan["placeholder_map"]) if manifest else None
@@ -639,6 +670,7 @@ def apply_plan(plan: dict[str, Any], dest: Path, *, force: bool = False, skip_ve
         "destination": str(dest),
         "changed_files": changed_files,
         "renamed_paths": renamed_paths,
+        "placeholder_match_counts": placeholder_stats["match_counts"],
         "removed_packs": removed,
         "env_file": env_written,
         "android_sdk": sdk_written,
