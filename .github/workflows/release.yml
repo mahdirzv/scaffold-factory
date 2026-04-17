@@ -1,0 +1,26 @@
+name: release
+
+# Publishes a GitHub Release on every `vX.Y.Z` tag push. Release notes are
+# auto-generated from PR titles merged since the previous tag.
+# Tagging a version is the only manual step; the release entry follows.
+
+on:
+  push:
+    tags: ['v*']
+
+permissions:
+  contents: write
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - name: Publish GitHub Release
+        uses: softprops/action-gh-release@v2
+        with:
+          generate_release_notes: true
+          name: ${{ github.ref_name }}
+          prerelease: ${{ contains(github.ref_name, '-') }}
