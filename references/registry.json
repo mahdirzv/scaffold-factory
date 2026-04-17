@@ -1,7 +1,7 @@
 {
   "version": "0.1.0",
   "min_scaffold_py_version": "0.1.0",
-  "_note": "Sources pin to scaffold/v0.1.0-prep branch for initial testing. After merging + tagging, change @scaffold/v0.1.0-prep to @v0.1.0 across all entries.",
+  "_note": "TODO(v0.1.0): flip @scaffold/v0.1.0-prep -> @v0.1.0 across all sources AFTER tags are cut on kmp-starter-project and base-next-starter. Branch-based refs are fine for pre-tag testing but must NOT ship in a released skill tag — feature branches get deleted and the registry would break.",
   "stack_defaults": {
     "kmp":    { "auth_provider": "clerk", "theme_preset": "neutral" },
     "nextjs": { "auth_provider": "clerk", "theme_preset": "neutral" }

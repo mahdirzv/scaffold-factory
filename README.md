@@ -23,6 +23,16 @@ $ scaffold.py create nextjs MyApp --dest ./MyApp --auth-provider clerk
 
 Generates `.env.local` with `AUTH_PROVIDER=clerk` and runs `pnpm build`.
 
+## Requirements
+
+- **Python 3.10 or newer** (script uses modern type syntax; 3.9 and older are rejected at startup with a clear message).
+- **git** on PATH (for lazy-cloning starters).
+- **Per stack:**
+  - KMP → JDK 17+, Android SDK (auto-detected via `ANDROID_HOME` / `ANDROID_SDK_ROOT` or common paths).
+  - Next.js → Node.js 20+ and pnpm (`npm i -g pnpm` or `corepack enable`).
+
+Missing executables are reported with an actionable error (e.g. "install pnpm with `npm i -g pnpm`") instead of a Python traceback.
+
 ## Install
 
 ```bash
